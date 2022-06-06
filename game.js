@@ -1,12 +1,10 @@
 class Figure {
     constructor(coord) {
         this.prev_coord = coord;
-        this.back_coord = "";
         this.coord = coord;
         this.id = coord;
         this.img = document.getElementById(coord).innerHTML;
-        this.disappeared = false;
-        this.win = false;
+
     }
 
     changeCoord(coord) {
@@ -15,17 +13,10 @@ class Figure {
     }
 
     printFigure(disappeared = false) {
-        if (disappeared == false) {
-            this.disappeared = false;
-            this.win = false;
             document.getElementById(this.coord).innerHTML = this.img;
             if (this.coord != this.prev_coord){
                 document.getElementById(this.prev_coord).innerHTML = "";
             }
-        }
-        else {
-            this.disappeared = true;
-        }
         return;
     }
 
@@ -36,12 +27,12 @@ class Figure {
 }
 
 class Game {
-    constructor() {
+    constructor(undo_stack) {
         this.figures = [];
         this.text = "";
         this.current_move = 1;
         this.moves_numb = 0;
-        this.disappeared_figure = null;
+        this.undo_stack = undo_stack;
     }
     setText(text_game){
         this.text = text_game;
@@ -58,49 +49,26 @@ class Game {
             }
         }
     }
-    getMove(move_type){
-        if (move_type == "next"){
-            if ( this.current_move <= this.moves_numb){
-                this.current_move = this.current_move;;}
-            else{
-                return;
+    checkFigures(f_coord){
+        for (var fgr in this.figures){
+            if (this.figures[fgr].coord == f_coord){
+               this.figures[fgr].disappeared = true;
+               return true;
             }
-        } else if (move_type == "prev"){
-            if (this.current_move > 1) {
-                this.current_move -= 1;}
-            else{
-                return;}
-        } else if (move_type == "again") {
-            while (this.current_move > 1){
-                console.log(this.current_move);
-                this.makeMove("prev");
-            }
-            return;
         }
+        return false;
+    }
+
+    getMove(move_type){
         console.log(this.current_move);
         let numb = String(this.current_move) + ".";
         let str = this.text.slice(this.text.indexOf(numb), this.text.indexOf(numb) + 14);
         console.log(str);
-        if (str.indexOf("X") == -1) {
             var begin1 = str.slice(3, 5);
             var end1 = str.slice(6, 8);
-            var begin2 = str.slice(9, 11);
-            var end2 = str.slice(12, 14);
-            if (move_type == "next") {
-                var moves = [begin1, end1, begin2, end2];
-                this.current_move += 1;
-            }
-            else if (move_type == "prev") {
-                var moves = [end1, begin1, end2, begin2];
-            }
-        }
-        else{
-            var begin1 = str.slice(3, 5);
-            var end1 = str.slice(6, 8);
-            if (str.slice(9, 11) == "X") {
+            if (str.slice(9, 10) == "X") {
                 var begin2 = end1;
                 var end2 = end1;
-                this.disappeared_figure = document.getElementById(end1).innerHTML;
             }
             else{
                 var begin2 = str.slice(9, 11);
@@ -110,43 +78,97 @@ class Game {
                 var moves = [begin1, end1, begin2, end2];
                 this.current_move += 1;
             }
-            else if (move_type == "prev") {
-                var moves = [end1, begin1, end2, begin2];
-            }
-
-        }
         console.log(moves);
         return moves;
     }
+    copyArray(){
+        var new_array = [];
+        for (let i in this.figures){
+            let new_fgr = new Figure(this.figures[i].coord);
+            new_fgr.prev_coord = this.figures[i].prev_coord;
+            new_array.push(new Figure(this.figures[i].coord));
+        }
+        return new_array;
+    }
     makeMove(move_type){
+        this.undo_stack.pushState(this.copyArray());
         var moves = this.getMove(move_type);
         console.log(this.figures);
         for (var fgr in this.figures){
-            if (this.figures[fgr].coord == moves[0] && this.figures[fgr].disappeared == false) {
+            if (this.figures[fgr].coord == moves[0]) {
                 this.figures[fgr].changeCoord(moves[1]);
                 this.figures[fgr].printFigure();
-                if (moves[1] == moves[2]){
-                    this.figures[fgr].win = true;
-                }
-            }
-            if (this.figures[fgr].coord == moves[2] && this.figures[fgr].win == false) {
-                this.figures[fgr].changeCoord(moves[3]);
-                if (moves[2] == moves[3] && this.figures[fgr].disappeared == false){
-                   this.figures[fgr].printFigure(true);
-                }
-                else {
-                    this.figures[fgr].printFigure();
-                }
 
             }
         }
+        setTimeout(() => {
+        for (var fgr in this.figures){
+            if (this.figures[fgr].coord == moves[2] && moves[2] != moves[3]) {
+                this.figures[fgr].changeCoord(moves[3]);
+
+                this.figures[fgr].printFigure();
+        }
+        }}
+
+
+           ,1000 );
+
         return;
+    }
+    clearField(){
+        for (var fgr in this.figures){
+            document.getElementById(this.figures[fgr].coord).innerHTML = "";
+        }
+    }
+    makeBackMove(){
+        this.clearField();
+        let res = this.undo_stack.popState();
+        if (res != null){
+            this.figures = res;
+            this.current_move -=1;
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    againMove(){
+        let res = true;
+        while(res == true){
+            res = this.makeBackMove();
+            if (this.undo_stack.states.length == 0){
+                break;
+            }
+        }
     }
 }
 
+class Undo {
+    constructor(){
+        this.states = [];
+    }
+    pushState(state){
+        this.states.push(state);
+    }
+    popState(){
+        if (this.states.length != 0){
+            let last_figures = this.states.pop();
+            for (var fgr in last_figures){
+                last_figures[fgr].printFigure();
+            }
+            return last_figures;
+        }
+        else{
+            return null;
+        }
+    }
+
+}
 
 
-var game = new Game();
+var undo = new Undo();
+var game = new Game(undo);
+
 
 function readFile() {
     let file = document.getElementById("loadedfile").files[0];
@@ -171,12 +193,12 @@ function move(){
 }
 
 function backMove(){
-    game.makeMove("prev");
+    game.makeBackMove();
     return;
 }
 
 function moveAgain(){
-    game.makeMove("again");
+    game.againMove();
     return;
 }
 
